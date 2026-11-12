@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.zeroc.Ice.Current;
 
@@ -28,8 +30,12 @@ public class BookingServiceImpl implements BookingService {
     public static final long DEFAULT_LOCK_DURATION_SECONDS = 90;
 
     private final EventInfo eventInfo;
-    private final Map<String, Seat> seatsMap = new HashMap<>();
-    private final List<BookingRecord> bookingsList = new ArrayList<>();
+
+    // cambio a estructuras de datos concurrentes para evitar las condiciones de
+    // carrera
+    // dejo el tipo generico para no tener errores futuros.
+    private final Map<String, Seat> seatsMap = new ConcurrentHashMap<>();
+    private final List<BookingRecord> bookingsList = new CopyOnWriteArrayList<>();
 
     public BookingServiceImpl() {
         this.eventInfo = new EventInfo(
@@ -38,8 +44,7 @@ public class BookingServiceImpl implements BookingService {
                 "2026-11-28 20:00",
                 "Auditorio Manuelita - Universidad Icesi",
                 90, 90, 0, 0,
-                120000.0, 75000.0, 45000.0
-        );
+                120000.0, 75000.0, 45000.0);
         initSeats();
     }
 
@@ -60,7 +65,8 @@ public class BookingServiceImpl implements BookingService {
         createSeatsForZone("I", 1, 10, SeatZone.ZONEGENERAL, 45000.0);
 
         updateEventCounters();
-        System.out.printf("[INFO] Inventario inicializado con %d sillas en 3 zonas (VIP, Platea, General).%n", seatsMap.size());
+        System.out.printf("[INFO] Inventario inicializado con %d sillas en 3 zonas (VIP, Platea, General).%n",
+                seatsMap.size());
     }
 
     private void createSeatsForZone(String row, int startNum, int endNum, SeatZone zone, double price) {
@@ -75,14 +81,14 @@ public class BookingServiceImpl implements BookingService {
                     SeatState.AVAILABLE,
                     "",
                     0L,
-                    DEFAULT_LOCK_DURATION_SECONDS
-            );
+                    DEFAULT_LOCK_DURATION_SECONDS);
             seatsMap.put(seatId, seat);
         }
     }
 
     private boolean isLockExpired(Seat seat) {
-        if (seat.state != SeatState.LOCKED) return false;
+        if (seat.state != SeatState.LOCKED)
+            return false;
         long elapsedSeconds = (System.currentTimeMillis() - seat.lockTimestamp) / 1000L;
         return elapsedSeconds > seat.lockDurationSeconds;
     }
@@ -141,7 +147,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public LockResult lockSeat(String seatId, String clientId, Current current)
+    public synchronized LockResult lockSeat(String seatId, String clientId, Current current)
             throws SeatNotFoundException, SeatNotAvailableException {
 
         Seat seat = seatsMap.get(seatId);
@@ -164,7 +170,8 @@ public class BookingServiceImpl implements BookingService {
                 long expiresAt = seat.lockTimestamp + (seat.lockDurationSeconds * 1000L);
                 return new LockResult(true, seatId, "Bloqueo renovado con éxito.", expiresAt);
             }
-            throw new SeatNotAvailableException(String.format("La silla %s ya no se encuentra disponible (Estado: %s).", seatId, seat.state));
+            throw new SeatNotAvailableException(
+                    String.format("La silla %s ya no se encuentra disponible (Estado: %s).", seatId, seat.state));
         }
 
         // Simulación de latencia de red / I/O en base de datos (No remover)
@@ -206,7 +213,8 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public BookingResult confirmBooking(String[] seatIds, String clientId, String customerName, String customerEmail, Current current)
+    public BookingResult confirmBooking(String[] seatIds, String clientId, String customerName, String customerEmail,
+            Current current)
             throws InvalidBookingException, BookingException {
 
         if (seatIds == null || seatIds.length == 0) {
@@ -260,8 +268,7 @@ public class BookingServiceImpl implements BookingService {
                 customerEmail.trim(),
                 seatIds,
                 totalAmount,
-                now
-        );
+                now);
         bookingsList.add(record);
 
         System.out.printf("[BOOKING-CONFIRMED] Código: %s | Cliente: %s (%s) | %d sillas | Total: $%,.0f COP%n",
@@ -273,8 +280,7 @@ public class BookingServiceImpl implements BookingService {
                 "Reserva confirmada con éxito. Disfrute del evento.",
                 seatIds,
                 totalAmount,
-                now
-        );
+                now);
     }
 
     @Override
