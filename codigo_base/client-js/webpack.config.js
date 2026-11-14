@@ -21,11 +21,10 @@ module.exports = {
         ]
     }
 
-    // plugins: [
-    //     new HtmlWebpackPlugin({
-    //         template
-    //     })
-
-    // ]
+    plugins: [
+        new HtmlWebpackPlugin({
+            template
+        })
+    ]
 }
 

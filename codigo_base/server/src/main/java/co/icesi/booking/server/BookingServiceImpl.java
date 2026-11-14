@@ -2,7 +2,6 @@ package co.icesi.booking.server;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,9 +30,7 @@ public class BookingServiceImpl implements BookingService {
 
     private final EventInfo eventInfo;
 
-    // cambio a estructuras de datos concurrentes para evitar las condiciones de
-    // carrera
-    // dejo el tipo generico para no tener errores futuros.
+
     private final Map<String, Seat> seatsMap = new ConcurrentHashMap<>();
     private final List<BookingRecord> bookingsList = new CopyOnWriteArrayList<>();
 
@@ -147,7 +144,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public synchronized LockResult lockSeat(String seatId, String clientId, Current current)
+    public LockResult lockSeat(String seatId, String clientId, Current current)
             throws SeatNotFoundException, SeatNotAvailableException {
 
         Seat seat = seatsMap.get(seatId);
@@ -155,41 +152,46 @@ public class BookingServiceImpl implements BookingService {
             throw new SeatNotFoundException("Silla no encontrada: " + seatId);
         }
 
-        // Si estaba bloqueada pero expiró el tiempo de retención, liberarla
-        if (seat.state == SeatState.LOCKED && isLockExpired(seat)) {
-            System.out.printf("[LOCK-EXPIRED] El bloqueo de la silla %s expiró. Liberando.%n", seatId);
-            seat.state = SeatState.AVAILABLE;
-            seat.lockedByClientId = "";
-        }
-
-        // Validación de disponibilidad
-        if (seat.state != SeatState.AVAILABLE) {
-            if (seat.state == SeatState.LOCKED && clientId.equals(seat.lockedByClientId)) {
-                // El mismo cliente renueva el bloqueo
-                seat.lockTimestamp = System.currentTimeMillis();
-                long expiresAt = seat.lockTimestamp + (seat.lockDurationSeconds * 1000L);
-                return new LockResult(true, seatId, "Bloqueo renovado con éxito.", expiresAt);
+        // bloque synchronized. Lo unique que se bloquea es la silla individual 
+        synchronized(seat){
+            // Si estaba bloqueada pero expiró el tiempo de retención, liberarla
+            if (seat.state == SeatState.LOCKED && isLockExpired(seat)) {
+                System.out.printf("[LOCK-EXPIRED] El bloqueo de la silla %s expiró. Liberando.%n", seatId);
+                seat.state = SeatState.AVAILABLE;
+                seat.lockedByClientId = "";
             }
-            throw new SeatNotAvailableException(
-                    String.format("La silla %s ya no se encuentra disponible (Estado: %s).", seatId, seat.state));
+
+            // Validación de disponibilidad
+            if (seat.state != SeatState.AVAILABLE) {
+                if (seat.state == SeatState.LOCKED && clientId.equals(seat.lockedByClientId)) {
+                    // El mismo cliente renueva el bloqueo
+                    seat.lockTimestamp = System.currentTimeMillis();
+                    long expiresAt = seat.lockTimestamp + (seat.lockDurationSeconds * 1000L);
+                    return new LockResult(true, seatId, "Bloqueo renovado con éxito.", expiresAt);
+                }
+                throw new SeatNotAvailableException(
+                        String.format("La silla %s ya no se encuentra disponible (Estado: %s).", seatId, seat.state));
+            }
+
+            // Simulación de latencia de red / I/O en base de datos (No remover)
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException ignored) {
+            }
+
+            seat.state = SeatState.LOCKED;
+            seat.lockedByClientId = clientId;
+            seat.lockTimestamp = System.currentTimeMillis();
+            seat.lockDurationSeconds = DEFAULT_LOCK_DURATION_SECONDS;
+
+            long expiresAt = seat.lockTimestamp + (DEFAULT_LOCK_DURATION_SECONDS * 1000L);
+            System.out.printf("[LOCK-OK] Silla %s bloqueada exitosamente para cliente: %s (expira en %ds)%n",
+                    seatId, clientId, DEFAULT_LOCK_DURATION_SECONDS);
+
+            return new LockResult(true, seatId, "Silla bloqueada exitosamente.", expiresAt);
         }
 
-        // Simulación de latencia de red / I/O en base de datos (No remover)
-        try {
-            Thread.sleep(25);
-        } catch (InterruptedException ignored) {
-        }
-
-        seat.state = SeatState.LOCKED;
-        seat.lockedByClientId = clientId;
-        seat.lockTimestamp = System.currentTimeMillis();
-        seat.lockDurationSeconds = DEFAULT_LOCK_DURATION_SECONDS;
-
-        long expiresAt = seat.lockTimestamp + (DEFAULT_LOCK_DURATION_SECONDS * 1000L);
-        System.out.printf("[LOCK-OK] Silla %s bloqueada exitosamente para cliente: %s (expira en %ds)%n",
-                seatId, clientId, DEFAULT_LOCK_DURATION_SECONDS);
-
-        return new LockResult(true, seatId, "Silla bloqueada exitosamente.", expiresAt);
+        
     }
 
     @Override
@@ -199,17 +201,20 @@ public class BookingServiceImpl implements BookingService {
             throw new SeatNotFoundException("Silla no encontrada: " + seatId);
         }
 
-        // Solo puede liberar el cliente que la bloqueó o si ya expiró
-        if (seat.state == SeatState.LOCKED) {
-            if (clientId.equals(seat.lockedByClientId) || isLockExpired(seat)) {
-                seat.state = SeatState.AVAILABLE;
-                seat.lockedByClientId = "";
-                seat.lockTimestamp = 0L;
-                System.out.printf("[RELEASE-OK] Silla %s liberada por cliente: %s%n", seatId, clientId);
-                return true;
+        synchronized(seat) {
+            if (seat.state == SeatState.LOCKED) {
+                if (clientId.equals(seat.lockedByClientId) || isLockExpired(seat)) {
+                    seat.state = SeatState.AVAILABLE;
+                    seat.lockedByClientId = "";
+                    seat.lockTimestamp = 0L;
+                    System.out.printf("[RELEASE-OK] Silla %s liberada por cliente: %s%n", seatId, clientId);
+                    return true;
+                }
             }
+            return false;   
         }
-        return false;
+        // Solo puede liberar el cliente que la bloqueó o si ya expiró
+        
     }
 
     @Override
@@ -230,57 +235,61 @@ public class BookingServiceImpl implements BookingService {
         double totalAmount = 0.0;
         List<Seat> validatedSeats = new ArrayList<>();
 
-        // Paso 1: Validación preliminar de las sillas
-        for (String seatId : seatIds) {
-            Seat seat = seatsMap.get(seatId);
-            if (seat == null) {
-                throw new SeatNotFoundException("Silla no existe: " + seatId);
-            }
-            if (seat.state == SeatState.BOOKED) {
-                throw new BookingException("La silla " + seatId + " ya fue vendida definitivamente.");
-            }
-            if (seat.state == SeatState.LOCKED) {
-                if (isLockExpired(seat)) {
-                    throw new LockExpiredException("El bloqueo temporal de la silla " + seatId + " ha expirado.");
+        // aca no puede ser synchronized(seat) pq el cliente puede reservar muchos asientos
+        // entonces mejor se protege todo el bloque 
+        synchronized (this) {
+          // Paso 1: Validación preliminar de las sillas
+            for (String seatId : seatIds) {
+                Seat seat = seatsMap.get(seatId);
+                if (seat == null) {
+                    throw new SeatNotFoundException("Silla no existe: " + seatId);
                 }
-                if (!clientId.equals(seat.lockedByClientId)) {
-                    throw new BookingException("La silla " + seatId + " se encuentra bloqueada por otro comprador.");
+                if (seat.state == SeatState.BOOKED) {
+                    throw new BookingException("La silla " + seatId + " ya fue vendida definitivamente.");
                 }
+                if (seat.state == SeatState.LOCKED) {
+                    if (isLockExpired(seat)) {
+                        throw new LockExpiredException("El bloqueo temporal de la silla " + seatId + " ha expirado.");
+                    }
+                    if (!clientId.equals(seat.lockedByClientId)) {
+                        throw new BookingException("La silla " + seatId + " se encuentra bloqueada por otro comprador.");
+                    }
+                }
+                totalAmount += seat.price;
+                validatedSeats.add(seat);
             }
-            totalAmount += seat.price;
-            validatedSeats.add(seat);
+
+            // Paso 2: Confirmación y cambio a BOOKED (Proceso no atómico)
+            for (Seat s : validatedSeats) {
+                s.state = SeatState.BOOKED;
+                s.lockedByClientId = clientId;
+            }
+
+            String bookingCode = "RES-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            long now = System.currentTimeMillis();
+
+            BookingRecord record = new BookingRecord(
+                    bookingCode,
+                    eventInfo.id,
+                    clientId,
+                    customerName.trim(),
+                    customerEmail.trim(),
+                    seatIds,
+                    totalAmount,
+                    now);
+            bookingsList.add(record);
+
+            System.out.printf("[BOOKING-CONFIRMED] Código: %s | Cliente: %s (%s) | %d sillas | Total: $%,.0f COP%n",
+                    bookingCode, customerName, clientId, seatIds.length, totalAmount);
+
+            return new BookingResult(
+                    true,
+                    bookingCode,
+                    "Reserva confirmada con éxito. Disfrute del evento.",
+                    seatIds,
+                    totalAmount,
+                    now);  
         }
-
-        // Paso 2: Confirmación y cambio a BOOKED (Proceso no atómico)
-        for (Seat s : validatedSeats) {
-            s.state = SeatState.BOOKED;
-            s.lockedByClientId = clientId;
-        }
-
-        String bookingCode = "RES-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        long now = System.currentTimeMillis();
-
-        BookingRecord record = new BookingRecord(
-                bookingCode,
-                eventInfo.id,
-                clientId,
-                customerName.trim(),
-                customerEmail.trim(),
-                seatIds,
-                totalAmount,
-                now);
-        bookingsList.add(record);
-
-        System.out.printf("[BOOKING-CONFIRMED] Código: %s | Cliente: %s (%s) | %d sillas | Total: $%,.0f COP%n",
-                bookingCode, customerName, clientId, seatIds.length, totalAmount);
-
-        return new BookingResult(
-                true,
-                bookingCode,
-                "Reserva confirmada con éxito. Disfrute del evento.",
-                seatIds,
-                totalAmount,
-                now);
     }
 
     @Override
