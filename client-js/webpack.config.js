@@ -4,7 +4,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
   mode: 'development',
-  
+
   entry: './src/index.js',
 
   output: {
@@ -17,6 +17,12 @@ module.exports = {
     port: 3000,
     open: true,
     hot: true,
+    client: {
+      overlay: {
+        warnings: false,
+        errors: true,
+      },
+    },
   },
 
   module: {
@@ -33,4 +39,12 @@ module.exports = {
       template: './public/index.html',
     }),
   ],
+
+    resolve: {
+    fallback: {
+      fs: false,
+      net: false,
+      tls: false,
+    },
+  },
 };
