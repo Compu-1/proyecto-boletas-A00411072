@@ -1,4 +1,5 @@
 // @ts-check
+import './styles/main.css';
 import { iceService } from './services/iceBookingService.js';
 
 async function main() {
@@ -6,7 +7,7 @@ async function main() {
   if (app) {
     app.innerHTML = `
       <div style="font-family: sans-serif; padding: 30px;">
-        <h2>Conectando con el servidor Java ZeroC Ice... ⏳</h2>
+        <h2>Conectando con el servidor Java ZeroC Ice...</h2>
       </div>
     `;
   }

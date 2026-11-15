@@ -3,8 +3,11 @@ import { Ice } from 'ice';
 import '../generated/BookingService.js';
 
 // En ZeroC Ice para navegador, el módulo Slice se registra en window y en el ModuleRegistry de Ice
+// Busca booking APP dependiendo de si se esta en el navegador o no
 const BookingApp = (typeof window !== 'undefined' && window.BookingApp)
+// si en el navegador
   ? window.BookingApp
+  // le dice a ice que busque 
   : Ice._ModuleRegistry.module('BookingApp');
 
 class IceBookingService {
