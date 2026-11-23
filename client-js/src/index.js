@@ -75,6 +75,18 @@ async function handleSeatClick(seat) {
   const stateVal = (seat.state && seat.state.value !== undefined) ? seat.state.value : seat.state;
   const isMine = (seat.lockedByClientId === iceService.getClientId());
 
+  // Si la silla ya fue vendida
+  if (stateVal === 2) {
+    showToast(`La silla ${seat.id} ya fue vendida.`, 'error');
+    return;
+  }
+
+  // Si la silla está bloqueada por otro comprador
+  if (stateVal === 1 && !isMine) {
+    showToast(`La silla ${seat.id} está apartada temporalmente por otro comprador.`, 'error');
+    return;
+  }
+
   try {
     if (stateVal === 0) {
       // Estado Disponible -> Bloquear en Java

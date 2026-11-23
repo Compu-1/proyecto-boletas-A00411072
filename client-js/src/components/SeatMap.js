@@ -60,15 +60,12 @@ export class SeatMap {
             }
           }
 
-          const isDisabled = (stateVal === 2) || (stateVal === 1 && !isMine);
-
           seatsHtml += `
             <button 
               type="button" 
               class="seat-item ${stateClass}" 
               data-seat-id="${seatId}" 
               title="${tooltip}"
-              ${isDisabled ? 'disabled' : ''}
             >
               ${num}
             </button>
@@ -140,8 +137,8 @@ export class SeatMap {
       </div>
     `;
 
-    // Vincular eventos de clic en los botones de las sillas activas
-    this.container.querySelectorAll('.seat-item:not([disabled])').forEach(btn => {
+    // Vincular eventos de clic en todas las sillas
+    this.container.querySelectorAll('.seat-item').forEach(btn => {
       btn.addEventListener('click', () => {
         const seatId = btn.getAttribute('data-seat-id');
         if (!seatId) return;
