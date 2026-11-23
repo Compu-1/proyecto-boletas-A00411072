@@ -20,8 +20,11 @@ function showToast(message, type = 'info') {
   container.appendChild(toast);
 
   setTimeout(() => {
-    toast.remove();
-  }, 4000);
+    toast.style.opacity = '0';
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
+  }, 3500);
 }
 
 /**
