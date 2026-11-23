@@ -3,12 +3,38 @@ import './styles/main.css';
 import { iceService } from './services/iceBookingService.js';
 import { SeatMap } from './components/SeatMap.js';
 import { CartTimer } from './components/CartTimer.js';
+import { CheckoutModal } from './components/CheckoutModal.js';
 
 /** @type {SeatMap | null} */
 let seatMapComponent = null;
 
 /** @type {CartTimer | null} */
 let cartTimerComponent = null;
+
+/** @type {CheckoutModal | null} */
+let checkoutModalComponent = null;
+
+/** @type {Array<any>} */
+let currentSeats = [];
+
+/**
+ * Muestra una notificación emergente sencilla en pantalla
+ * @param {string} message 
+ * @param {'info' | 'success' | 'error'} type 
+ */
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.remove();
+  }, 4000);
+}
 
 /**
  * Consulta el estado más reciente del servidor Java y actualiza los componentes
@@ -20,17 +46,19 @@ async function refreshData() {
       iceService.getAllSeats()
     ]);
 
+    currentSeats = seats || [];
+
     // 1. Actualizar números en los indicadores superiores (KPIs)
     updateHeaderKpis(info);
 
     // 2. Redibujar el mapa de sillas con los nuevos estados
     if (seatMapComponent) {
-      seatMapComponent.render(seats, iceService.getClientId());
+      seatMapComponent.render(currentSeats, iceService.getClientId());
     }
 
     // 3. Filtrar mis sillas bloqueadas y actualizar el carrito
     if (cartTimerComponent) {
-      const mySeats = seats.filter(s => {
+      const mySeats = currentSeats.filter(s => {
         const stateVal = (s.state && s.state.value !== undefined) ? s.state.value : s.state;
         return stateVal === 1 && s.lockedByClientId === iceService.getClientId();
       });
@@ -67,17 +95,19 @@ async function handleSeatClick(seat) {
       // Estado Disponible -> Bloquear en Java
       console.log(`[App] Bloqueando silla ${seat.id}...`);
       await iceService.lockSeat(seat.id);
+      showToast(`Silla ${seat.id} apartada por 90 segundos.`, 'success');
       await refreshData();
     } else if (stateVal === 1 && isMine) {
       // Estado Bloqueada por mí -> Liberar voluntariamente
       console.log(`[App] Liberando silla ${seat.id}...`);
       await iceService.releaseSeat(seat.id);
+      showToast(`Silla ${seat.id} liberada.`, 'info');
       await refreshData();
     }
   } catch (err) {
     console.error(`[App] Error en operación sobre silla ${seat.id}:`, err);
     const msg = (err && typeof err.ice_name === 'function') ? err.ice_name() : (err.message || String(err));
-    alert(`No se pudo procesar la silla ${seat.id}: ${msg}`);
+    showToast(`No se pudo procesar la silla ${seat.id}: ${msg}`, 'error');
     await refreshData();
   }
 }
@@ -99,6 +129,7 @@ async function main() {
     // 2. Obtener datos iniciales
     const info = await iceService.getEventInfo();
     const seats = await iceService.getAllSeats();
+    currentSeats = seats;
 
     // 3. Montar la estructura HTML base de la aplicación
     app.innerHTML = `
@@ -149,7 +180,7 @@ async function main() {
       seatMapComponent = new SeatMap(mapContainer, {
         onSeatClick: handleSeatClick
       });
-      seatMapComponent.render(seats, iceService.getClientId());
+      seatMapComponent.render(currentSeats, iceService.getClientId());
     }
 
     // 5. Instanciar el componente CartTimer
@@ -159,27 +190,64 @@ async function main() {
         onReleaseSeat: async (seatId) => {
           try {
             await iceService.releaseSeat(seatId);
+            showToast(`Silla ${seatId} liberada.`, 'info');
             await refreshData();
           } catch (err) {
             console.error(err);
           }
         },
         onCheckout: () => {
-          alert('¡Siguiente paso: abriremos el formulario modal de pago!');
+          // Abrir modal de checkout con mis sillas actuales
+          const mySeats = currentSeats.filter(s => {
+            const stateVal = (s.state && s.state.value !== undefined) ? s.state.value : s.state;
+            return stateVal === 1 && s.lockedByClientId === iceService.getClientId();
+          });
+
+          if (mySeats.length > 0 && checkoutModalComponent) {
+            checkoutModalComponent.open(mySeats);
+          }
         },
         onTimeout: async () => {
-          alert('¡El tiempo de reserva de 90 segundos ha expirado! Las sillas han sido liberadas.');
+          showToast('El tiempo de 90 segundos ha expirado. Sillas liberadas.', 'error');
           await refreshData();
         }
       });
 
-      // Inicializar el carrito con las sillas que pertenezcan a este cliente
-      const mySeats = seats.filter(s => {
+      // Inicializar el carrito con las sillas de este cliente
+      const mySeats = currentSeats.filter(s => {
         const stateVal = (s.state && s.state.value !== undefined) ? s.state.value : s.state;
         return stateVal === 1 && s.lockedByClientId === iceService.getClientId();
       });
       cartTimerComponent.update(mySeats);
     }
+
+    // 6. Instanciar el Modal de Checkout
+    const modalContainer = document.getElementById('modal-container');
+    if (modalContainer) {
+      checkoutModalComponent = new CheckoutModal(modalContainer, {
+        onConfirm: async (name, email) => {
+          const mySeats = currentSeats.filter(s => {
+            const stateVal = (s.state && s.state.value !== undefined) ? s.state.value : s.state;
+            return stateVal === 1 && s.lockedByClientId === iceService.getClientId();
+          });
+          const seatIds = mySeats.map(s => s.id);
+
+          // Llamada RPC a Java confirmBooking
+          const result = await iceService.confirmBooking(seatIds, name, email);
+          return result;
+        },
+        onSuccess: async () => {
+          showToast('¡Compra realizada con éxito!', 'success');
+          await refreshData();
+        }
+      });
+    }
+
+    // 7. Sincronización periódica automática (cada 3 segundos)
+    // Garantiza que si otra ventana aparta o compra una silla, se refleje en vivo
+    setInterval(() => {
+      refreshData();
+    }, 3000);
 
   } catch (err) {
     console.error('[App] Error crítico de inicialización:', err);
