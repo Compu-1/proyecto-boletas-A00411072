@@ -1,27 +1,15 @@
-// @ts-check
 import './styles/main.css';
 import { iceService } from './services/iceBookingService.js';
 import { SeatMap } from './components/SeatMap.js';
 import { CartTimer } from './components/CartTimer.js';
 import { CheckoutModal } from './components/CheckoutModal.js';
 
-/** @type {SeatMap | null} */
 let seatMapComponent = null;
-
-/** @type {CartTimer | null} */
 let cartTimerComponent = null;
-
-/** @type {CheckoutModal | null} */
 let checkoutModalComponent = null;
-
-/** @type {Array<any>} */
 let currentSeats = [];
 
-/**
- * Muestra una notificación emergente sencilla en pantalla
- * @param {string} message 
- * @param {'info' | 'success' | 'error'} type 
- */
+// Muestra una notificación emergente sencilla en pantalla
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -69,10 +57,7 @@ async function refreshData() {
   }
 }
 
-/**
- * Actualiza los contadores de aforo en la barra superior
- * @param {any} info 
- */
+// Actualiza los contadores de aforo en la barra superior
 function updateHeaderKpis(info) {
   const availEl = document.getElementById('kpi-available');
   const lockedEl = document.getElementById('kpi-locked');
@@ -82,10 +67,7 @@ function updateHeaderKpis(info) {
   if (bookedEl) bookedEl.textContent = String(info.bookedSeats);
 }
 
-/**
- * Manejador del clic en una silla desde el mapa
- * @param {any} seat 
- */
+// Manejador del clic en una silla desde el mapa
 async function handleSeatClick(seat) {
   const stateVal = (seat.state && seat.state.value !== undefined) ? seat.state.value : seat.state;
   const isMine = (seat.lockedByClientId === iceService.getClientId());

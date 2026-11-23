@@ -1,17 +1,5 @@
-// @ts-check
-
-/**
- * Componente interactivo del mapa de sillas (SeatMap)
- * - Muestra el escenario y las zonas (VIP, Platea, General).
- * - Renderiza cada silla con su número y estado visual (Disponible, Seleccionada por mí, Bloqueada por otro, Vendida).
- * - Notifica mediante callback onSeatClick cuando el usuario hace clic en una silla disponible o en una de sus sillas seleccionadas.
- */
+// Componente interactivo para mostrar el plano de las 90 sillas
 export class SeatMap {
-  /**
-   * @param {HTMLElement} container - Elemento del DOM donde se renderiza el mapa
-   * @param {Object} options
-   * @param {(seat: any) => void} options.onSeatClick - Función a ejecutar cuando se hace clic en una silla
-   */
   constructor(container, { onSeatClick }) {
     this.container = container;
     this.onSeatClick = onSeatClick;
@@ -19,11 +7,7 @@ export class SeatMap {
     this.clientId = '';
   }
 
-  /**
-   * Actualiza los datos y redibuja el mapa de sillas
-   * @param {Array<any>} seats - Lista de asientos devuelta por getAllSeats()
-   * @param {string} clientId - ID único de este cliente
-   */
+  // Dibuja las sillas agrupadas por zona (VIP, Platea, General)
   render(seats, clientId) {
     this.seats = seats || [];
     this.clientId = clientId;

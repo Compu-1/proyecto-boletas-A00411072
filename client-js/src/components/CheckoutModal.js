@@ -1,29 +1,12 @@
-// @ts-check
-
-/**
- * Componente: Modal de Checkout y Comprobante Oficial de Compra
- * Responsabilidades simples:
- * 1. Abrir un formulario pidiendo Nombre y Correo del comprador.
- * 2. Llamar a la operación remota confirmBooking() en Java.
- * 3. Mostrar el comprobante con el código alfanumérico generado (RES-XXXXXX).
- */
+// Modal para capturar datos del comprador y mostrar el comprobante
 export class CheckoutModal {
-  /**
-   * @param {HTMLElement} container - <div id="modal-container">
-   * @param {Object} options
-   * @param {(name: string, email: string) => Promise<any>} options.onConfirm - Ejecuta la compra en Java
-   * @param {() => void} options.onSuccess - Refresca la interfaz tras la compra
-   */
   constructor(container, { onConfirm, onSuccess }) {
     this.container = container;
     this.onConfirm = onConfirm;
     this.onSuccess = onSuccess;
   }
 
-  /**
-   * Abre el formulario para ingresar datos del comprador
-   * @param {Array<any>} seats - Lista de sillas retenidas por el usuario
-   */
+  // Muestra el formulario con el resumen de compra
   open(seats) {
     const total = seats.reduce((sum, s) => sum + s.price, 0);
     const seatNames = seats.map(s => s.id).join(', ');

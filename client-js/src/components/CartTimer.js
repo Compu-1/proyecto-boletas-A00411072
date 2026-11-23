@@ -1,13 +1,5 @@
-// @ts-check
-
+// Componente para el carrito de compras y la cuenta regresiva de 90 segundos
 export class CartTimer {
-  /**
-   * @param {HTMLElement} container - Contenedor en el HTML (<aside id="cart-container">)
-   * @param {Object} options
-   * @param {(seatId: string) => void} options.onReleaseSeat - Acción al quitar una silla
-   * @param {() => void} options.onCheckout - Acción al presionar Confirmar Reserva
-   * @param {() => void} options.onTimeout - Acción cuando el reloj llega a 00:00
-   */
   constructor(container, { onReleaseSeat, onCheckout, onTimeout }) {
     this.container = container;
     this.onReleaseSeat = onReleaseSeat;
@@ -19,10 +11,7 @@ export class CartTimer {
     this.timerInterval = null;
   }
 
-  /**
-   * Actualiza las sillas en el carrito y arranca/detiene el reloj según corresponda
-   * @param {Array<any>} mySeats - Sillas bloqueadas por este usuario
-   */
+  // Actualiza las sillas en el carrito y gestiona el temporizador
   update(mySeats) {
     const hadSeats = this.lockedSeats.length > 0;
     this.lockedSeats = mySeats || [];
