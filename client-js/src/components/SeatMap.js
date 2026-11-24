@@ -118,19 +118,19 @@ export class SeatMap {
         <!-- Convención de colores / Leyenda -->
         <div class="map-legend">
           <div class="legend-item">
-            <span class="legend-badge" style="background: var(--seat-avail-bg); border: 1.5px solid var(--seat-avail-border);"></span>
+            <span class="legend-badge legend-avail"></span>
             <span>Disponible</span>
           </div>
           <div class="legend-item">
-            <span class="legend-badge" style="background: var(--seat-selected-bg);"></span>
+            <span class="legend-badge legend-selected"></span>
             <span>Tu selección</span>
           </div>
           <div class="legend-item">
-            <span class="legend-badge" style="background: var(--seat-locked-bg); border: 1.5px dashed var(--seat-locked-border);"></span>
+            <span class="legend-badge legend-locked"></span>
             <span>Bloqueada (Otro)</span>
           </div>
           <div class="legend-item">
-            <span class="legend-badge" style="background: var(--seat-booked-bg);"></span>
+            <span class="legend-badge legend-booked"></span>
             <span>Vendida</span>
           </div>
         </div>

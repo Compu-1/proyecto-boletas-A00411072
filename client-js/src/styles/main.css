@@ -279,10 +279,30 @@ body {
 }
 
 .legend-badge {
-  width: 14px;
+  width: 16px;
   height: 14px;
   border-radius: var(--radius);
   display: inline-block;
+}
+
+.legend-avail {
+  background: #ffffff;
+  border: 1.5px solid #9ca3af;
+}
+
+.legend-selected {
+  background: var(--icesi-blue);
+  border: 1.5px solid var(--icesi-blue-dark);
+}
+
+.legend-locked {
+  background: #fef3c7;
+  border: 1.5px dashed #d97706;
+}
+
+.legend-booked {
+  background: #374151;
+  border: 1.5px solid #1f2937;
 }
 
 /* CARRITO Y TEMPORIZADOR */
